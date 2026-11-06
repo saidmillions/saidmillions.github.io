@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Piano Note Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&family=Manrope:wght@400;600;700&display=swap">
+<style>
+:root {
+  --bg: #f3f2ee; --surface: #ffffff; --ink: #16161a; --muted: #6b6a72; --line: #dcdad4;
+  --accent: #9c2b2b; --accent-ink: #ffffff;
+  --ok: #1f8a4c; --ok-bg: #e3f4ea; --bad: #c0392b; --bad-bg: #fbe6e3;
+  --display: "Bodoni Moda", "Didot", "Times New Roman", serif;
+  --body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111114; --surface: #1b1b20; --ink: #f2f0ea; --muted: #9a98a2; --line: #2e2e35;
+    --accent: #d25b55; --accent-ink: #111114;
+    --ok: #4cc27f; --ok-bg: #16301f; --bad: #ef6b5d; --bad-bg: #3a1916;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px));
+}
+.app { height: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-block: 16px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 700; font-size: 28px; margin: 4px 0 0; }
+.hint { color: var(--muted); font-size: 14px; margin: 6px 0 0; max-width: 60ch; }
+
+.stage {
+  flex: 1; min-height: 260px; background: var(--surface); border: 2px solid var(--line); border-radius: 14px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  text-align: center; transition: background .15s, border-color .15s;
+}
+.stage.ok { background: var(--ok-bg); border-color: var(--ok); }
+.stage.bad { background: var(--bad-bg); border-color: var(--bad); }
+.letter { font-family: var(--display); font-weight: 700; line-height: .9; font-size: clamp(140px, 38vw, 260px); }
+.ru { font-family: var(--display); font-weight: 500; font-size: clamp(40px, 11vw, 72px); color: var(--muted); }
+.idle .letter, .idle .ru { opacity: .25; }
+.verdict { min-height: 1.5em; font-weight: 700; font-size: 18px; margin-top: 14px; }
+.ok .verdict { color: var(--ok); } .bad .verdict { color: var(--bad); }
+
+.stats { display: flex; gap: 20px; justify-content: center; font-variant-numeric: tabular-nums; font-size: 15px; }
+.stats b { font-size: 22px; }
+.s-ok b { color: var(--ok); } .s-bad b { color: var(--bad); }
+
+.meter { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.meter .track { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.meter .track i { display: block; height: 100%; width: 0; background: var(--accent); }
+.heard { min-width: 6ch; text-align: right; font-variant-numeric: tabular-nums; }
+
+.controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+button {
+  font: 700 17px var(--body); border-radius: 10px; padding: 14px 22px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); flex: 1; min-width: 140px; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+label.sens { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.err { color: var(--bad); font-size: 14px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.tabs button { padding: 8px 14px; font-size: 14px; border-radius: 999px; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.finger-label { font-weight: 700; font-size: clamp(20px, 5vw, 28px); margin-top: 6px; }
+.finger-label b { color: var(--accent); font-size: 1.3em; }
+.hands { display: flex; gap: clamp(20px, 6vw, 48px); justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+.hand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hand .name { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.fingers { display: flex; align-items: flex-end; gap: 5px; }
+.fingers span {
+  width: clamp(26px, 7vw, 38px); border-radius: 999px 999px 8px 8px; border: 2px solid var(--line);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 6px;
+  font-weight: 700; font-size: 15px; color: var(--muted); background: var(--bg);
+}
+.fingers span.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* finger lengths: thumb short, middle longest */
+.fingers [data-f="1"] { height: 44px; } .fingers [data-f="2"] { height: 70px; }
+.fingers [data-f="3"] { height: 80px; } .fingers [data-f="4"] { height: 72px; }
+.fingers [data-f="5"] { height: 56px; }
+.fingers [data-f="1"] { align-self: flex-end; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="tabs" role="group" aria-label="Lesson">
+      <button id="tab1" aria-pressed="true">Lesson 1</button>
+      <button id="tab2" aria-pressed="false">Lesson 2</button>
+    </div>
+    <div class="eyebrow" id="eyebrow">Lesson 1 · Урок 1</div>
+    <h1 id="title">Find the note</h1>
+    <p class="hint" id="hint"></p>
+  </header>
+
+  <section class="stage idle" id="stage" aria-live="polite">
+    <div class="letter" id="letter">C</div>
+    <div class="ru" id="ru">До</div>
+    <div id="fingerBox" hidden>
+      <div class="finger-label">Finger <b id="fNum">2</b> · Палец <b id="fNumRu">2</b></div>
+      <div class="hands">
+        <div class="hand"><div class="fingers" id="leftHand"></div><div class="name">Left · Левая</div></div>
+        <div class="hand"><div class="fingers" id="rightHand"></div><div class="name">Right · Правая</div></div>
+      </div>
+    </div>
+    <div class="verdict" id="verdict">Press Start and allow the microphone</div>
+  </section>
+
+  <div class="stats">
+    <span class="s-ok">Correct <b id="nOk">0</b></span>
+    <span class="s-bad">Wrong <b id="nBad">0</b></span>
+  </div>
+
+  <div class="meter" aria-hidden="true">
+    <span>Mic</span><div class="track"><i id="level"></i></div><span class="heard" id="heard">–</span>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="toggle">Start</button>
+    <label class="sens" for="sens">Sensitivity
+      <input type="range" id="sens" min="1" max="10" value="6">
+    </label>
+  </div>
+  <div class="err" id="err" hidden></div>
+</div>
+
+<script>
+const NOTES = [["C","До"],["D","Ре"],["E","Ми"],["F","Фа"],["G","Соль"],["A","Ля"],["B","Си"]];
+const PC_NAMES = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const NATURAL_PC = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+const RU = { "C":"До","C♯":"До♯","D":"Ре","D♯":"Ре♯","E":"Ми","F":"Фа","F♯":"Фа♯","G":"Соль","G♯":"Соль♯","A":"Ля","A♯":"Ля♯","B":"Си" };
+
+const $ = id => document.getElementById(id);
+const stage=$("stage"), letterEl=$("letter"), ruEl=$("ru"), verdictEl=$("verdict"),
+      toggle=$("toggle"), sens=$("sens"), levelEl=$("level"), heardEl=$("heard"), errEl=$("err");
+
+let ctx, analyser, stream, buf, running=false, loopId=null, wakeLock=null;
+let target=-1, finger=0, nOk=0, nBad=0, lesson=1;
+
+const LESSONS = {
+  1: { eyebrow:"Lesson 1 · Урок 1", title:"Find the note",
+       hint:"Play the note shown, in any octave. Green means correct, red means wrong. Either way the next note follows. Practise without the sustain pedal." },
+  2: { eyebrow:"Lesson 2 · Урок 2", title:"Note and finger",
+       hint:"Play the note with the highlighted finger on both hands at the same time, in any two octaves. Thumb is 1, little finger is 5. The app checks the note. Watch your fingers yourself." }
+};
+// fingers drawn as seen from above: left hand 5→1, right hand 1→5
+$("leftHand").innerHTML  = [5,4,3,2,1].map(f=>`<span data-f="${f}">${f}</span>`).join("");
+$("rightHand").innerHTML = [1,2,3,4,5].map(f=>`<span data-f="${f}">${f}</span>`).join("");
+
+function setLesson(n) {
+  lesson=n; const L=LESSONS[n];
+  $("eyebrow").textContent=L.eyebrow; $("title").textContent=L.title; $("hint").textContent=L.hint;
+  $("tab1").setAttribute("aria-pressed", n===1); $("tab2").setAttribute("aria-pressed", n===2);
+  $("fingerBox").hidden = n!==2;
+  try { localStorage.setItem("lesson", n); } catch(e) {}
+  if (running) { nOk=0; nBad=0; $("nOk").textContent=0; $("nBad").textContent=0; pickNote(); }
+}
+$("tab1").addEventListener("click", ()=>setLesson(1));
+$("tab2").addEventListener("click", ()=>setLesson(2));
+// listening state machine: "wait" (ignore audio briefly), "armed" (wait for a key strike), "collect" (gather pitch frames)
+let state="wait", stateUntil=0, frames=[], baseline=0;
+
+function pickNote() {
+  let i; do { i = Math.floor(Math.random()*NOTES.length); } while (i===target);
+  target=i;
+  letterEl.textContent=NOTES[i][0]; ruEl.textContent=NOTES[i][1];
+  if (lesson===2) {
+    let f; do { f = 1+Math.floor(Math.random()*5); } while (f===finger);
+    finger=f;
+    $("fNum").textContent=f; $("fNumRu").textContent=f;
+    document.querySelectorAll(".fingers span").forEach(s=>s.classList.toggle("on", +s.dataset.f===f));
+  }
+  stage.classList.remove("ok","bad");
+  verdictEl.textContent="Listening…";
+  setState("wait", 350);
+}
+function setState(s, ms=0){ state=s; stateUntil=performance.now()+ms; frames=[]; }
+
+// YIN pitch detection on a window of samples
+function detectPitch(b, sr) {
+  const W = 2048, minF = 50, maxF = 2100;
+  const tauMin = Math.floor(sr/maxF), tauMax = Math.min(Math.floor(sr/minF), b.length-W-1);
+  const d = new Float32Array(tauMax+1);
+  for (let tau=tauMin; tau<=tauMax; tau++) {
+    let s=0;
+    for (let i=0;i<W;i++){ const x=b[i]-b[i+tau]; s+=x*x; }
+    d[tau]=s;
+  }
+  let run=0, best=-1;
+  const cm = new Float32Array(tauMax+1);
+  for (let tau=1; tau<=tauMax; tau++) {
+    if (tau<tauMin) { run+=d[tau]; cm[tau]=1; continue; }
+    run+=d[tau]; cm[tau]= run>0 ? d[tau]*tau/run : 1;
+  }
+  for (let tau=tauMin+1; tau<tauMax; tau++) {
+    if (cm[tau]<0.15) { while (tau+1<tauMax && cm[tau+1]<cm[tau]) tau++; best=tau; break; }
+  }
+  if (best<0) return -1;
+  const a=cm[best-1], c=cm[best], e=cm[best+1];
+  const shift = (a+e-2*c)!==0 ? (a-e)/(2*(a+e-2*c)) : 0;
+  return sr/(best+shift);
+}
+const pcOf = f => ((Math.round(69+12*Math.log2(f/440)) % 12) + 12) % 12;
+
+function judge(pc) {
+  const want = NATURAL_PC[NOTES[target][0]];
+  const name = PC_NAMES[pc];
+  if (pc===want) { nOk++; stage.classList.add("ok"); verdictEl.textContent=`✓ ${name} · ${RU[name]}`; }
+  else { nBad++; stage.classList.add("bad"); verdictEl.textContent=`✗ You played ${name} · ${RU[name]}`; }
+  $("nOk").textContent=nOk; $("nBad").textContent=nBad;
+  setState("hold", lesson===2 ? 1100 : 700);   // longer pause so the second hand doesn't count for the next note
+}
+
+function loop() {
+  analyser.getFloatTimeDomainData(buf);
+  let sum=0; for (let i=0;i<buf.length;i++) sum+=buf[i]*buf[i];
+  const rms=Math.sqrt(sum/buf.length);
+  levelEl.style.width=Math.min(100, rms*400)+"%";
+
+  const minLevel = 0.004 + (10-+sens.value)*0.004;   // higher sensitivity → quieter notes count
+  const now=performance.now();
+  const f = rms>minLevel*0.6 ? detectPitch(buf, ctx.sampleRate) : -1;
+  heardEl.textContent = f>0 ? PC_NAMES[pcOf(f)] : "–";
+
+  if (state==="hold" && now>=stateUntil) { pickNote(); }
+  else if (state==="wait" && now>=stateUntil) { baseline=rms; setState("armed"); }
+  else if (state==="armed") {
+    // a new key strike = clear jump in loudness above the decaying background
+    if (rms>minLevel && rms>baseline*1.6) setState("collect", 260);
+    else baseline = baseline*0.9 + rms*0.1;
+  }
+  else if (state==="collect") {
+    if (f>0) frames.push(pcOf(f));
+    if (now>=stateUntil || frames.length>=6) {
+      if (frames.length>=2) {
+        const counts={}; frames.forEach(p=>counts[p]=(counts[p]||0)+1);
+        const pc=+Object.keys(counts).sort((x,y)=>counts[y]-counts[x])[0];
+        judge(pc);
+      } else { baseline=rms; setState("armed"); }
+    }
+  }
+  loopId=setTimeout(loop, 40);
+}
+
+async function start() {
+  errEl.hidden=true;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false } });
+  } catch(e) {
+    errEl.textContent="The microphone isn't available. Allow microphone access for this site in Safari (aA menu → Website Settings), then press Start again.";
+    errEl.hidden=false; return;
+  }
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  await ctx.resume();
+  const src=ctx.createMediaStreamSource(stream);
+  analyser=ctx.createAnalyser(); analyser.fftSize=4096;
+  buf=new Float32Array(analyser.fftSize);
+  src.connect(analyser);
+  running=true; nOk=0; nBad=0; $("nOk").textContent=0; $("nBad").textContent=0;
+  stage.classList.remove("idle"); toggle.textContent="Stop";
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch(e) {}
+  pickNote(); loop();
+}
+function stop() {
+  running=false; clearTimeout(loopId);
+  stream?.getTracks().forEach(t=>t.stop()); ctx?.close();
+  stage.classList.add("idle"); stage.classList.remove("ok","bad");
+  verdictEl.textContent = (nOk+nBad) ? `${nOk} of ${nOk+nBad} correct` : "Press Start and allow the microphone";
+  toggle.textContent="Start"; levelEl.style.width="0"; heardEl.textContent="–";
+  try { wakeLock?.release(); } catch(e) {} wakeLock=null;
+}
+toggle.addEventListener("click", ()=> running ? stop() : start());
+try { const s=localStorage.getItem("sens"); if (s) sens.value=s; } catch(e) {}
+let savedLesson=1; try { savedLesson = +localStorage.getItem("lesson") || 1; } catch(e) {}
+setLesson(savedLesson);
+sens.addEventListener("change", ()=>{ try{ localStorage.setItem("sens", sens.value); }catch(e){} });
+</script>
+</body>
+</html>
