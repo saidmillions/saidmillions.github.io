@@ -45,7 +45,7 @@ h1 { font-family: var(--display); font-weight: 700; font-size: 28px; margin: 4px
 .letter { font-family: var(--display); font-weight: 700; line-height: .9; font-size: clamp(140px, 38vw, 260px); }
 .ru { font-family: var(--display); font-weight: 500; font-size: clamp(40px, 11vw, 72px); color: var(--muted); }
 .idle .letter, .idle .ru { opacity: .25; }
-.verdict { min-height: 1.5em; font-weight: 700; font-size: 18px; }
+.verdict { min-height: 1.5em; font-weight: 700; font-size: 18px; margin-top: 14px; }
 .ok .verdict { color: var(--ok); } .bad .verdict { color: var(--bad); }
 
 .stats { display: flex; gap: 20px; justify-content: center; font-variant-numeric: tabular-nums; font-size: 15px; }
@@ -66,19 +66,52 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 label.sens { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
 .err { color: var(--bad); font-size: 14px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.tabs button { padding: 8px 14px; font-size: 14px; border-radius: 999px; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.finger-label { font-weight: 700; font-size: clamp(20px, 5vw, 28px); margin-top: 6px; }
+.finger-label b { color: var(--accent); font-size: 1.3em; }
+.hands { display: flex; gap: clamp(20px, 6vw, 48px); justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+.hand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hand .name { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.fingers { display: flex; align-items: flex-end; gap: 5px; }
+.fingers span {
+  width: clamp(26px, 7vw, 38px); border-radius: 999px 999px 8px 8px; border: 2px solid var(--line);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 6px;
+  font-weight: 700; font-size: 15px; color: var(--muted); background: var(--bg);
+}
+.fingers span.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+/* finger lengths: thumb short, middle longest */
+.fingers [data-f="1"] { height: 44px; } .fingers [data-f="2"] { height: 70px; }
+.fingers [data-f="3"] { height: 80px; } .fingers [data-f="4"] { height: 72px; }
+.fingers [data-f="5"] { height: 56px; }
+.fingers [data-f="1"] { align-self: flex-end; }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="eyebrow">Lesson 1 · Урок 1</div>
-    <h1>Find the note</h1>
-    <p class="hint">Play the note shown, in any octave. Green means correct, red means wrong. Either way the next note follows. Practise without the sustain pedal.</p>
+    <div class="tabs" role="group" aria-label="Lesson">
+      <button id="tab1" aria-pressed="true">Lesson 1</button>
+      <button id="tab2" aria-pressed="false">Lesson 2</button>
+    </div>
+    <div class="eyebrow" id="eyebrow">Lesson 1 · Урок 1</div>
+    <h1 id="title">Find the note</h1>
+    <p class="hint" id="hint"></p>
   </header>
 
   <section class="stage idle" id="stage" aria-live="polite">
     <div class="letter" id="letter">C</div>
     <div class="ru" id="ru">До</div>
+    <div id="fingerBox" hidden>
+      <div class="finger-label">Finger <b id="fNum">2</b> · Палец <b id="fNumRu">2</b></div>
+      <div class="hands">
+        <div class="hand"><div class="fingers" id="leftHand"></div><div class="name">Left · Левая</div></div>
+        <div class="hand"><div class="fingers" id="rightHand"></div><div class="name">Right · Правая</div></div>
+      </div>
+    </div>
     <div class="verdict" id="verdict">Press Start and allow the microphone</div>
   </section>
 
@@ -111,7 +144,28 @@ const stage=$("stage"), letterEl=$("letter"), ruEl=$("ru"), verdictEl=$("verdict
       toggle=$("toggle"), sens=$("sens"), levelEl=$("level"), heardEl=$("heard"), errEl=$("err");
 
 let ctx, analyser, stream, buf, running=false, loopId=null, wakeLock=null;
-let target=-1, nOk=0, nBad=0;
+let target=-1, finger=0, nOk=0, nBad=0, lesson=1;
+
+const LESSONS = {
+  1: { eyebrow:"Lesson 1 · Урок 1", title:"Find the note",
+       hint:"Play the note shown, in any octave. Green means correct, red means wrong. Either way the next note follows. Practise without the sustain pedal." },
+  2: { eyebrow:"Lesson 2 · Урок 2", title:"Note and finger",
+       hint:"Play the note with the highlighted finger on both hands at the same time, in any two octaves. Thumb is 1, little finger is 5. The app checks the note. Watch your fingers yourself." }
+};
+// fingers drawn as seen from above: left hand 5→1, right hand 1→5
+$("leftHand").innerHTML  = [5,4,3,2,1].map(f=>`<span data-f="${f}">${f}</span>`).join("");
+$("rightHand").innerHTML = [1,2,3,4,5].map(f=>`<span data-f="${f}">${f}</span>`).join("");
+
+function setLesson(n) {
+  lesson=n; const L=LESSONS[n];
+  $("eyebrow").textContent=L.eyebrow; $("title").textContent=L.title; $("hint").textContent=L.hint;
+  $("tab1").setAttribute("aria-pressed", n===1); $("tab2").setAttribute("aria-pressed", n===2);
+  $("fingerBox").hidden = n!==2;
+  try { localStorage.setItem("lesson", n); } catch(e) {}
+  if (running) { nOk=0; nBad=0; $("nOk").textContent=0; $("nBad").textContent=0; pickNote(); }
+}
+$("tab1").addEventListener("click", ()=>setLesson(1));
+$("tab2").addEventListener("click", ()=>setLesson(2));
 // listening state machine: "wait" (ignore audio briefly), "armed" (wait for a key strike), "collect" (gather pitch frames)
 let state="wait", stateUntil=0, frames=[], baseline=0;
 
@@ -119,6 +173,12 @@ function pickNote() {
   let i; do { i = Math.floor(Math.random()*NOTES.length); } while (i===target);
   target=i;
   letterEl.textContent=NOTES[i][0]; ruEl.textContent=NOTES[i][1];
+  if (lesson===2) {
+    let f; do { f = 1+Math.floor(Math.random()*5); } while (f===finger);
+    finger=f;
+    $("fNum").textContent=f; $("fNumRu").textContent=f;
+    document.querySelectorAll(".fingers span").forEach(s=>s.classList.toggle("on", +s.dataset.f===f));
+  }
   stage.classList.remove("ok","bad");
   verdictEl.textContent="Listening…";
   setState("wait", 350);
@@ -157,7 +217,7 @@ function judge(pc) {
   if (pc===want) { nOk++; stage.classList.add("ok"); verdictEl.textContent=`✓ ${name} · ${RU[name]}`; }
   else { nBad++; stage.classList.add("bad"); verdictEl.textContent=`✗ You played ${name} · ${RU[name]}`; }
   $("nOk").textContent=nOk; $("nBad").textContent=nBad;
-  setState("hold", 700);
+  setState("hold", lesson===2 ? 1100 : 700);   // longer pause so the second hand doesn't count for the next note
 }
 
 function loop() {
@@ -220,6 +280,8 @@ function stop() {
 }
 toggle.addEventListener("click", ()=> running ? stop() : start());
 try { const s=localStorage.getItem("sens"); if (s) sens.value=s; } catch(e) {}
+let savedLesson=1; try { savedLesson = +localStorage.getItem("lesson") || 1; } catch(e) {}
+setLesson(savedLesson);
 sens.addEventListener("change", ()=>{ try{ localStorage.setItem("sens", sens.value); }catch(e){} });
 </script>
 </body>
